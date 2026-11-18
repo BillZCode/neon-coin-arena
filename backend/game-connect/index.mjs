@@ -1,11 +1,12 @@
-import { PutItemCommand } from "@aws-sdk/client-dynamodb";
 import {
   ddbClient,
   TABLE_NAME,
   ARENA_W,
   ARENA_H,
   PLAYER_COLORS,
-} from "./ws-utils.mjs";
+  makeDdbCommand,
+  ttlEpochSeconds,
+} from "../shared/ws-utils.mjs";
 
 export const handler = async (event) => {
   const connectionId = event.requestContext.connectionId;
@@ -16,7 +17,7 @@ export const handler = async (event) => {
 
   try {
     await ddbClient.send(
-      new PutItemCommand({
+      await makeDdbCommand("PutItemCommand", {
         TableName: TABLE_NAME,
         Item: {
           pk: { S: `PLAYER#${connectionId}` },
@@ -31,6 +32,7 @@ export const handler = async (event) => {
           coinsCollected: { N: "0" },
           joined: { BOOL: false },
           updatedAt: { N: String(Date.now()) },
+          ttl: { N: String(ttlEpochSeconds(3600)) },
         },
       })
     );

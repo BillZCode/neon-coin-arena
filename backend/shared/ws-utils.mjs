@@ -1,13 +1,8 @@
 import {
-  DynamoDBClient,
-  ScanCommand,
-  DeleteItemCommand,
-  PutItemCommand,
-} from "@aws-sdk/client-dynamodb";
-import {
-  ApiGatewayManagementApiClient,
-  PostToConnectionCommand,
-} from "@aws-sdk/client-apigatewaymanagementapi";
+  getDynamoClient,
+  getApiGwManagementClient,
+  makeAwsCommand,
+} from "./aws-clients.mjs";
 
 export const TABLE_NAME = process.env.TABLE_NAME || "websocket-game-db";
 export const ARENA_W = 960;
@@ -32,13 +27,37 @@ const COIN_CATALOG = [
   { kind: "star", value: 50, weight: 6 },
 ];
 
-export const ddbClient = new DynamoDBClient({});
-const apigwCache = new Map();
+/**
+ * Builds an AWS SDK command instance, falling back to plain descriptors in unit tests.
+ */
+export async function makeDdbCommand(name, input) {
+  return makeAwsCommand("@aws-sdk/client-dynamodb", name, input);
+}
+
+async function makePostToConnCommand(input) {
+  return makeAwsCommand(
+    "@aws-sdk/client-apigatewaymanagementapi",
+    "PostToConnectionCommand",
+    input
+  );
+}
+
+export async function ddbSend(cmd) {
+  const client = await getDynamoClient();
+  return client.send(cmd);
+}
+
+/**
+ * DynamoDB client helper compatible with Lambda and mocked unit tests.
+ */
+export const ddbClient = {
+  send: ddbSend,
+};
 
 /**
  * Returns a cached ApiGatewayManagementApiClient for the incoming request endpoint.
  */
-export function getApiGwClient(event) {
+export async function getApiGwClient(event) {
   const domain = event?.requestContext?.domainName;
   const stage = event?.requestContext?.stage;
   const endpoint =
@@ -47,15 +66,9 @@ export function getApiGwClient(event) {
   if (!endpoint) {
     throw new Error("Missing WebSocket callback endpoint");
   }
-  if (!apigwCache.has(endpoint)) {
-    apigwCache.set(endpoint, new ApiGatewayManagementApiClient({ endpoint }));
-  }
-  return apigwCache.get(endpoint);
+  return getApiGwManagementClient(endpoint);
 }
 
-/**
- * Picks a random element or weighted coin type.
- */
 function pickCoinType() {
   const total = COIN_CATALOG.reduce((sum, item) => sum + item.weight, 0);
   let r = Math.random() * total;
@@ -69,28 +82,29 @@ function pickCoinType() {
 /**
  * Builds a randomized coin object and persists it to DynamoDB.
  */
-export async function spawnCoinItem() {
+export async function spawnCoinItem(multiplier = 1) {
   const { kind, value } = pickCoinType();
+  const scaledValue = Math.round(value * Math.max(1, multiplier));
   const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   const margin = 46;
   const x = Math.round(margin + Math.random() * (ARENA_W - margin * 2));
   const y = Math.round(margin + Math.random() * (ARENA_H - margin * 2));
 
   await ddbClient.send(
-    new PutItemCommand({
+    await makeDdbCommand("PutItemCommand", {
       TableName: TABLE_NAME,
       Item: {
         pk: { S: `COIN#${id}` },
         coinId: { S: id },
         kind: { S: kind },
-        value: { N: String(value) },
+        value: { N: String(scaledValue) },
         x: { N: String(x) },
         y: { N: String(y) },
       },
     })
   );
 
-  return { id, kind, value, x, y };
+  return { id, kind, value: scaledValue, x, y };
 }
 
 /**
@@ -126,16 +140,32 @@ export function parseCoinItem(item) {
 }
 
 /**
- * Scans the shared arena DynamoDB table and partitions items into players and coins.
+ * Parses a persistent Hall-of-Fame DynamoDB entry.
+ */
+export function parseHallOfFameItem(item) {
+  return {
+    name: item.playerName?.S || item.pk?.S?.replace(/^HALL_OF_FAME#/, "") || "Player",
+    color: item.color?.S || "#38bdf8",
+    highestScore: Number(item.highestScore?.N ?? 0),
+    totalCoins: Number(item.totalCoins?.N ?? 0),
+    gamesPlayed: Number(item.gamesPlayed?.N ?? 0),
+    updatedAt: Number(item.updatedAt?.N ?? 0),
+  };
+}
+
+/**
+ * Scans the shared arena DynamoDB table and partitions items cleanly.
  */
 export async function scanArenaState() {
   const players = [];
   const coins = [];
+  const hallOfFame = [];
+  let stats = { totalEvents: 0, totalCoinsCollected: 0, totalChats: 0 };
   let ExclusiveStartKey;
 
   do {
     const res = await ddbClient.send(
-      new ScanCommand({
+      await makeDdbCommand("ScanCommand", {
         TableName: TABLE_NAME,
         ExclusiveStartKey,
       })
@@ -146,12 +176,21 @@ export async function scanArenaState() {
         players.push(parsePlayerItem(item));
       } else if (pk.startsWith("COIN#")) {
         coins.push(parseCoinItem(item));
+      } else if (pk.startsWith("HALL_OF_FAME#")) {
+        hallOfFame.push(parseHallOfFameItem(item));
+      } else if (pk === "STATS#GLOBAL") {
+        stats = {
+          totalEvents: Number(item.totalEvents?.N ?? 0),
+          totalCoinsCollected: Number(item.totalCoinsCollected?.N ?? 0),
+          totalChats: Number(item.totalChats?.N ?? 0),
+        };
       }
     }
     ExclusiveStartKey = res.LastEvaluatedKey;
   } while (ExclusiveStartKey);
 
-  return { players, coins };
+  hallOfFame.sort((a, b) => b.highestScore - a.highestScore);
+  return { players, coins, hallOfFame, stats };
 }
 
 /**
@@ -161,7 +200,7 @@ export async function postJson(apigw, connectionId, payload) {
   const data = new TextEncoder().encode(JSON.stringify(payload));
   try {
     await apigw.send(
-      new PostToConnectionCommand({
+      await makePostToConnCommand({
         ConnectionId: connectionId,
         Data: data,
       })
@@ -171,7 +210,7 @@ export async function postJson(apigw, connectionId, payload) {
     if (err?.name === "GoneException" || err?.$metadata?.httpStatusCode === 410) {
       await ddbClient
         .send(
-          new DeleteItemCommand({
+          await makeDdbCommand("DeleteItemCommand", {
             TableName: TABLE_NAME,
             Key: { pk: { S: `PLAYER#${connectionId}` } },
           })
@@ -201,4 +240,11 @@ export function clamp(val, min, max, fallback) {
   const n = Number(val);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, n));
+}
+
+/**
+ * Computes DynamoDB TTL epoch seconds ahead of now.
+ */
+export function ttlEpochSeconds(secondsAhead = 3600) {
+  return Math.floor(Date.now() / 1000) + secondsAhead;
 }
