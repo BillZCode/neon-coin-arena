@@ -48,9 +48,6 @@
   const wsUrlInput = document.getElementById("wsUrlInput");
   const colorPicker = document.getElementById("colorPicker");
   const lobbyError = document.getElementById("lobbyError");
-  const lobbyErrorText = document.getElementById("lobbyErrorText");
-  const lobbyErrorActions = document.getElementById("lobbyErrorActions");
-  const fallbackVpsBtn = document.getElementById("fallbackVpsBtn");
   const downloadAppLink = document.getElementById("downloadAppLink");
   const connectBtn = document.getElementById("connectBtn");
   const disconnectBtn = document.getElementById("disconnectBtn");
@@ -120,15 +117,8 @@
     }
   }
 
-  function showLobbyError(message, showVpsFallback = false) {
-    if (lobbyErrorText) {
-      lobbyErrorText.textContent = message;
-    } else {
-      lobbyError.textContent = message;
-    }
-    if (lobbyErrorActions) {
-      lobbyErrorActions.classList.toggle("hidden", !showVpsFallback || !VPS_WS_URL);
-    }
+  function showLobbyError(message) {
+    lobbyError.textContent = message;
     lobbyError.classList.remove("hidden");
   }
 
@@ -166,20 +156,6 @@
   wsUrlInput.addEventListener("input", () => {
     syncPresetFromUrl(wsUrlInput.value.trim());
   });
-
-  if (fallbackVpsBtn) {
-    fallbackVpsBtn.addEventListener("click", () => {
-      wsUrlInput.value = VPS_WS_URL;
-      syncPresetFromUrl(VPS_WS_URL);
-      localStorage.setItem("ws_game_url", VPS_WS_URL);
-      lobbyError.classList.add("hidden");
-      if (typeof joinForm.requestSubmit === "function") {
-        joinForm.requestSubmit();
-      } else {
-        connectBtn.click();
-      }
-    });
-  }
 
   COLORS.forEach((c, idx) => {
     const btn = document.createElement("button");
@@ -594,6 +570,8 @@
       pingTimer = null;
     }
     if (ws) {
+      ws.onclose = null;
+      ws.onerror = null;
       ws.close(1000, "Player left");
       ws = null;
     }
@@ -618,25 +596,27 @@
       return;
     }
     if (url.includes("YOUR_API_ID")) {
-      showLobbyError("Isi frontend/config.js atau pilih Server VPS 24/7 / URL kustom di Pengaturan Server.", Boolean(VPS_WS_URL));
+      showLobbyError("Silakan pilih server yang valid di Pengaturan Server.");
       return;
     }
 
     lobbyError.classList.add("hidden");
-    if (lobbyErrorActions) lobbyErrorActions.classList.add("hidden");
     localStorage.setItem("ws_game_name", nickname);
     localStorage.setItem("ws_game_url", url);
     syncPresetFromUrl(url);
 
-    if (ws) ws.close();
+    if (ws) {
+      ws.onclose = null;
+      ws.onerror = null;
+      ws.close();
+    }
     connectBtn.disabled = true;
     setConnectionStatus("connecting", "Connecting...");
-    let hadSocketError = false;
 
     try {
       ws = new WebSocket(url);
     } catch (err) {
-      showLobbyError(`Gagal membuka WebSocket: ${err.message}`, url !== VPS_WS_URL);
+      showLobbyError(`Gagal membuka koneksi: ${err.message}`);
       setConnectionStatus("offline", "Disconnected");
       connectBtn.disabled = false;
       return;
@@ -666,38 +646,13 @@
     };
 
     ws.onerror = () => {
-      hadSocketError = true;
-      const isAws = url.includes(".amazonaws.com");
-      const canFallback = Boolean(VPS_WS_URL && url !== VPS_WS_URL);
-      if (isAws) {
-        showLobbyError(
-          canFallback
-            ? "Server AWS WebSocket tidak merespons (kemungkinan sesi 4 jam AWS Academy Learner Lab sedang berhenti/expired). Klik tombol di bawah untuk langsung main lewat Server VPS 24/7, atau nyalakan kembali Lab AWS Anda."
-            : "Server AWS WebSocket tidak merespons. Pastikan API Gateway aktif atau ubah URL server di Pengaturan Server.",
-          canFallback
-        );
-      } else {
-        showLobbyError(
-          "Koneksi WebSocket gagal. Periksa endpoint URL atau status server.",
-          canFallback
-        );
-      }
+      showLobbyError("Gagal terhubung ke server. Silakan coba lagi.");
       appendLog("err", "WebSocket error");
     };
 
     ws.onclose = () => {
       appendLog("err", "$disconnect / Socket closed");
-      const canFallback = Boolean(VPS_WS_URL && url !== VPS_WS_URL);
-      const wasTryingAws = !selfId && !hadSocketError && url.includes(".amazonaws.com");
       disconnectClean();
-      if (wasTryingAws) {
-        showLobbyError(
-          canFallback
-            ? "Koneksi ke AWS WebSocket ditutup sebelum masuk arena. Pastikan Lab AWS aktif atau klik tombol di bawah untuk Server VPS 24/7."
-            : "Koneksi ke AWS WebSocket ditutup sebelum masuk arena. Pastikan Lab/API Gateway aktif.",
-          canFallback
-        );
-      }
     };
   });
 
