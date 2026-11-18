@@ -386,15 +386,6 @@ body {
   gap: 8px;
 }
 
-.motd-banner {
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  color: #bae6fd;
-  border-radius: 10px;
-  padding: 6px 11px;
-  font-size: 0.78rem;
-}
-
 .score-badge {
   background: rgba(251, 191, 36, 0.16);
   border: 1px solid rgba(251, 191, 36, 0.45);

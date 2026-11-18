@@ -51,7 +51,6 @@
   const lobbyErrorText = document.getElementById("lobbyErrorText");
   const lobbyErrorActions = document.getElementById("lobbyErrorActions");
   const fallbackVpsBtn = document.getElementById("fallbackVpsBtn");
-  const brandBadge = document.getElementById("brandBadge");
   const downloadAppLink = document.getElementById("downloadAppLink");
   const connectBtn = document.getElementById("connectBtn");
   const disconnectBtn = document.getElementById("disconnectBtn");
@@ -68,7 +67,6 @@
   const tabLiveLb = document.getElementById("tabLiveLb");
   const tabHofLb = document.getElementById("tabHofLb");
   const hofStatsRow = document.getElementById("hofStatsRow");
-  const motdBanner = document.getElementById("motdBanner");
   const chatMessages = document.getElementById("chatMessages");
   const chatForm = document.getElementById("chatForm");
   const chatInput = document.getElementById("chatInput");
@@ -110,17 +108,6 @@
     downloadAppLink.classList.add("hidden");
   }
 
-  function updateBrandBadge(url) {
-    if (!brandBadge) return;
-    if (url.includes(".amazonaws.com")) {
-      brandBadge.textContent = "AWS WebSocket";
-    } else if ((VPS_HOST && url.includes(VPS_HOST)) || (VPS_WS_URL && url === VPS_WS_URL)) {
-      brandBadge.textContent = "VPS 24/7";
-    } else {
-      brandBadge.textContent = "WebSocket Live";
-    }
-  }
-
   function syncPresetFromUrl(url) {
     if (serverPreset) {
       if (url === AWS_WS_URL) {
@@ -131,7 +118,6 @@
         serverPreset.value = "custom";
       }
     }
-    updateBrandBadge(url);
   }
 
   function showLobbyError(message, showVpsFallback = false) {
@@ -174,7 +160,6 @@
       } else {
         wsUrlInput.focus();
       }
-      updateBrandBadge(wsUrlInput.value.trim());
     });
   }
 
@@ -517,14 +502,6 @@
         (msg.coins || []).forEach((c) => coins.set(c.id, c));
         lobbyOverlay.classList.add("hidden");
         setConnectionStatus("online", "Connected");
-        if (motdBanner) {
-          if (msg.motd) {
-            motdBanner.textContent = `📢 ${msg.motd}`;
-            motdBanner.classList.remove("hidden");
-          } else {
-            motdBanner.classList.add("hidden");
-          }
-        }
         appendChat("System", null, "Berhasil masuk arena! Kumpulkan koin & bintang sebanyak mungkin.", true);
         playTone(520, 0.14, "triangle", 0.08);
         updateLeaderboard();
