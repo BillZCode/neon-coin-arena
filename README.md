@@ -2,6 +2,20 @@
 
 Game multiplayer 2D real-time menggunakan arsitektur **AWS Serverless Multi-Service** (`us-east-1`), dilengkapi server VPS Node.js 24/7 opsional serta aplikasi klien untuk web, Android (`.apk`), Windows (`.exe`), Linux, dan macOS.
 
+## Deploy Sekali Jalan (1 Perintah di AWS CloudShell)
+
+Cukup jalankan 1 perintah ini setelah menyalakan AWS Academy Learner Lab (**Start Lab**):
+
+```bash
+git clone https://github.com/BillZCode/neon-coin-arena.git && cd neon-coin-arena && ./deploy_all_aws.sh
+```
+
+Skrip [`deploy_all_aws.sh`](deploy_all_aws.sh) otomatis membuat semua resource AWS, mengisi `frontend/config.js` secara otomatis, upload website ke S3, serta menjalankan uji end-to-end WebSocket & HTTP API.
+
+Opsi tambahan:
+- Aktifkan HTTPS CDN CloudFront: `ENABLE_CLOUDFRONT=true ./deploy_all_aws.sh`
+- Rebuild `.exe` & `.apk` lalu sync ke VPS sekaligus: `BUILD_APPS=true VPS_TARGET=<user>@<vps-ip> ./deploy_all_aws.sh`
+
 ## Arsitektur Service AWS yang Digunakan
 
 1. **Amazon API Gateway (WebSocket API v2)** — `websocket-game-api` (`$connect`, `$disconnect`, `join`, `move`, `collect`, `chat`, `ping`).

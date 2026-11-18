@@ -261,10 +261,24 @@ if [[ -n "$SNS_TOPIC_ARN" ]]; then
     --region "$REGION" >/dev/null 2>&1 || true
 fi
 
+AWS_WS_URL="wss://${GAME_API_ID}.execute-api.${REGION}.amazonaws.com/dev"
+AWS_HTTP_API_URL="https://${HTTP_API_ID}.execute-api.${REGION}.amazonaws.com"
+
+if [[ -n "${ENV_OUT_FILE:-}" ]]; then
+  cat > "$ENV_OUT_FILE" <<EOF
+AWS_REGION=${REGION}
+AWS_WS_URL=${AWS_WS_URL}
+AWS_HTTP_API_URL=${AWS_HTTP_API_URL}
+DATA_BUCKET=${DATA_BUCKET:-}
+SQS_QUEUE_URL=${SQS_QUEUE_URL:-}
+SNS_TOPIC_ARN=${SNS_TOPIC_ARN:-}
+EOF
+fi
+
 echo ""
 echo "=== FULL AWS DEPLOY COMPLETE ==="
-echo "WebSocket URL : wss://${GAME_API_ID}.execute-api.${REGION}.amazonaws.com/dev"
-echo "HTTP API URL  : https://${HTTP_API_ID}.execute-api.${REGION}.amazonaws.com"
+echo "WebSocket URL : ${AWS_WS_URL}"
+echo "HTTP API URL  : ${AWS_HTTP_API_URL}"
 echo "Data S3 Bucket: ${DATA_BUCKET:-not-created}"
 echo "SQS Queue URL : ${SQS_QUEUE_URL:-not-created}"
 echo "SNS Topic ARN : ${SNS_TOPIC_ARN:-not-created}"
