@@ -1,0 +1,39 @@
+# Build artifacts & compiled release binaries
+.build/
+releases/
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime endpoint configs (may hold environment-specific URLs / IPs)
+frontend/config.js
+desktop-app/web/config.js
+android-app/app/src/main/assets/www/config.js
+.env
+.env.*
+
+# Keystores, signing credentials, certificates & private keys
+*.jks
+*.keystore
+*.p12
+*.pem
+*.key
+keystore.properties
+signing.properties
+
+# Android local SDK paths, Gradle & IDE caches
+android-app/local.properties
+android-app/.gradle/
+android-app/.kotlin/
+android-app/build/
+android-app/app/build/
+android-app/.idea/
+*.iml
+
+# Package outputs & OS clutter
+*.apk
+*.aab
+*.exe
+node_modules/
+*.log
+.DS_Store
