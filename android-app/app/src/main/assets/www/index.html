@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Neon Coin Arena — AWS WebSocket Multiplayer</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪙</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span id="brandBadge" class="brand-badge">AWS WebSocket</span>
+        <h1>Neon Coin Arena</h1>
+      </div>
+      <div class="hud-pills">
+        <div id="statusPill" class="pill pill-offline">
+          <span class="dot"></span>
+          <span id="statusText">Disconnected</span>
+        </div>
+        <div class="pill" id="pingPill">Ping: -- ms</div>
+        <div class="pill" id="onlinePill">Pemain: 0</div>
+        <a id="downloadAppLink" class="btn btn-ghost btn-download" href="downloads.html">📱 App (.apk / .exe)</a>
+        <button id="soundBtn" class="btn btn-ghost" type="button" title="Toggle Audio">🔊 Sound On</button>
+        <button id="disconnectBtn" class="btn btn-danger hidden" type="button">Disconnect</button>
+      </div>
+    </header>
+
+    <main class="main-grid">
+      <section class="arena-panel">
+        <div class="canvas-wrap">
+          <canvas id="arenaCanvas" width="960" height="600"></canvas>
+
+          <div id="lobbyOverlay" class="lobby-overlay">
+            <div class="lobby-card">
+              <h2>Masuk Arena Multiplayer</h2>
+              <p class="lobby-sub">
+                Kumpulkan koin &amp; bintang terbanyak, pakai <strong>Dash</strong> untuk menyalip lawan, dan ngobrol langsung di arena!
+              </p>
+
+              <form id="joinForm" class="lobby-form">
+                <label class="field">
+                  <span>Nickname Pemain</span>
+                  <input id="nameInput" type="text" maxlength="18" placeholder="Contoh: CyberFox" required />
+                </label>
+
+                <div class="field">
+                  <span>Warna Avatar</span>
+                  <div id="colorPicker" class="color-picker"></div>
+                </div>
+
+                <details class="server-advanced">
+                  <summary>⚙ Pengaturan Server (Opsional)</summary>
+                  <div class="server-presets" style="margin-top:8px;">
+                    <label class="field">
+                      <span>Pilih Server Multiplayer</span>
+                      <select id="serverPreset" class="field-select">
+                        <option value="aws">☁️ AWS WebSocket Service (us-east-1)</option>
+                        <option value="vps">🌐 Server VPS 24/7</option>
+                        <option value="custom">🔧 Endpoint WebSocket Kustom</option>
+                      </select>
+                    </label>
+                    <label class="field" style="margin-top:8px;">
+                      <span>WebSocket Endpoint URL</span>
+                      <input id="wsUrlInput" type="url" placeholder="wss://... atau ws://..." required />
+                    </label>
+                  </div>
+                </details>
+
+                <div id="lobbyError" class="lobby-error hidden">
+                  <div id="lobbyErrorText"></div>
+                  <div id="lobbyErrorActions" class="lobby-error-actions hidden">
+                    <button id="fallbackVpsBtn" class="btn btn-accent btn-xs" type="button">⚡ Main Lewat Server VPS 24/7</button>
+                  </div>
+                </div>
+
+                <button id="connectBtn" class="btn btn-primary btn-lg" type="submit">
+                  Hubungkan &amp; Main Sekarang
+                </button>
+              </form>
+
+              <div class="controls-hint">
+                <span><strong>Gerak:</strong> W A S D / Panah</span>
+                <span><strong>Dash:</strong> Spasi / Shift</span>
+                <span><strong>Chat:</strong> Klik kolom chat / Enter</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arena-footer">
+          <div class="dash-bar-wrap">
+            <span class="dash-label">Dash (Spasi)</span>
+            <div class="dash-track"><div id="dashFill" class="dash-fill"></div></div>
+            <span id="turboBadge" class="turbo-badge hidden">⚡ TURBO AKTIF!</span>
+          </div>
+          <div class="touch-controls">
+            <button class="btn btn-pad" data-dir="up" type="button">▲</button>
+            <button class="btn btn-pad" data-dir="left" type="button">◀</button>
+            <button class="btn btn-pad" data-dir="down" type="button">▼</button>
+            <button class="btn btn-pad" data-dir="right" type="button">▶</button>
+            <button id="dashBtn" class="btn btn-accent" type="button">⚡ Dash</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="card">
+          <div class="card-header">
+            <h2>Leaderboard Live</h2>
+            <span id="selfScoreBadge" class="score-badge">Skor: 0</span>
+          </div>
+          <ul id="leaderboardList" class="leaderboard-list">
+            <li class="empty-msg">Belum ada pemain terhubung.</li>
+          </ul>
+        </section>
+
+        <section class="card chat-card">
+          <div class="card-header">
+            <h2>💬 Obrolan Pemain</h2>
+            <span class="mini-note">Real-time</span>
+          </div>
+          <div id="chatMessages" class="chat-messages">
+            <div class="chat-empty">Masuk ke arena untuk mengobrol dengan pemain lain.</div>
+          </div>
+          <div class="quick-chat">
+            <button class="btn btn-quick" data-chat="👋 Halo semua!" type="button" disabled>👋 Halo!</button>
+            <button class="btn btn-quick" data-chat="🔥 Mantap!" type="button" disabled>🔥 Mantap</button>
+            <button class="btn btn-quick" data-chat="⚡ Gas terus!" type="button" disabled>⚡ Gas!</button>
+            <button class="btn btn-quick" data-chat="🏆 GG!" type="button" disabled>🏆 GG!</button>
+          </div>
+          <form id="chatForm" class="chat-form">
+            <input id="chatInput" type="text" maxlength="160" placeholder="Tulis pesan ke pemain lain..." disabled />
+            <button id="chatSendBtn" class="btn btn-primary" type="submit" disabled>Kirim</button>
+          </form>
+        </section>
+
+        <div class="dev-toggle-row">
+          <button id="toggleLogBtn" class="btn btn-ghost btn-xs" type="button">⚙ Tampilkan Log Teknis</button>
+        </div>
+
+        <section id="logCard" class="card log-card hidden">
+          <div class="card-header">
+            <h2>WebSocket Traffic</h2>
+            <button id="clearLogBtn" class="btn btn-ghost btn-xs" type="button">Bersihkan</button>
+          </div>
+          <div id="wsLog" class="ws-log"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
