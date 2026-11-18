@@ -356,6 +356,45 @@ body {
   font-size: 0.96rem;
 }
 
+.lb-tabs {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.btn-tab {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.btn-tab.active {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #e0f2fe;
+}
+
+.hof-stats {
+  font-size: 0.74rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  padding-top: 7px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.motd-banner {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #bae6fd;
+  border-radius: 10px;
+  padding: 6px 11px;
+  font-size: 0.78rem;
+}
+
 .score-badge {
   background: rgba(251, 191, 36, 0.16);
   border: 1px solid rgba(251, 191, 36, 0.45);

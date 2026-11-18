@@ -89,6 +89,7 @@
           </div>
         </div>
 
+        <div id="motdBanner" class="motd-banner hidden"></div>
         <div class="arena-footer">
           <div class="dash-bar-wrap">
             <span class="dash-label">Dash (Spasi)</span>
@@ -108,12 +109,16 @@
       <aside class="side-panel">
         <section class="card">
           <div class="card-header">
-            <h2>Leaderboard Live</h2>
+            <div class="lb-tabs">
+              <button id="tabLiveLb" class="btn btn-tab active" type="button">Live Arena</button>
+              <button id="tabHofLb" class="btn btn-tab" type="button">🏆 Hall of Fame</button>
+            </div>
             <span id="selfScoreBadge" class="score-badge">Skor: 0</span>
           </div>
           <ul id="leaderboardList" class="leaderboard-list">
             <li class="empty-msg">Belum ada pemain terhubung.</li>
           </ul>
+          <div id="hofStatsRow" class="hof-stats hidden"></div>
         </section>
 
         <section class="card chat-card">

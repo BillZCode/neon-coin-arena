@@ -2,6 +2,7 @@
   const APP_CFG = window.NEON_ARENA_CONFIG || {};
   const DEFAULT_AWS_WS_URL = "wss://YOUR_API_ID.execute-api.us-east-1.amazonaws.com/dev";
   const AWS_WS_URL = APP_CFG.AWS_WS_URL || DEFAULT_AWS_WS_URL;
+  const AWS_HTTP_API_URL = APP_CFG.AWS_HTTP_API_URL || "";
   const VPS_HOST = APP_CFG.VPS_HOST || "";
   const SAME_ORIGIN_WS_URL =
     window.location.host && window.location.protocol !== "file:"
@@ -64,6 +65,10 @@
   const dashBtn = document.getElementById("dashBtn");
   const selfScoreBadge = document.getElementById("selfScoreBadge");
   const leaderboardList = document.getElementById("leaderboardList");
+  const tabLiveLb = document.getElementById("tabLiveLb");
+  const tabHofLb = document.getElementById("tabHofLb");
+  const hofStatsRow = document.getElementById("hofStatsRow");
+  const motdBanner = document.getElementById("motdBanner");
   const chatMessages = document.getElementById("chatMessages");
   const chatForm = document.getElementById("chatForm");
   const chatInput = document.getElementById("chatInput");
@@ -337,24 +342,27 @@
     return true;
   }
 
-  function updateLeaderboard() {
-    const sorted = Array.from(players.values()).sort((a, b) => b.score - a.score);
-    onlinePill.textContent = `Pemain: ${sorted.length}`;
-    const me = selfId ? players.get(selfId) : null;
-    selfScoreBadge.textContent = `Skor: ${me ? me.score : 0}`;
+  let leaderboardMode = "live";
 
+  function renderLeaderboardMessage(msg) {
     leaderboardList.innerHTML = "";
-    if (sorted.length === 0) {
-      const li = document.createElement("li");
-      li.className = "empty-msg";
-      li.textContent = "Belum ada pemain terhubung.";
-      leaderboardList.appendChild(li);
+    const li = document.createElement("li");
+    li.className = "empty-msg";
+    li.textContent = msg;
+    leaderboardList.appendChild(li);
+  }
+
+  function renderLeaderboardRows(rows, emptyMsg, scoreSelector) {
+    leaderboardList.innerHTML = "";
+    if (!rows.length) {
+      renderLeaderboardMessage(emptyMsg);
       return;
     }
 
-    sorted.forEach((p, idx) => {
+    rows.forEach((p, idx) => {
+      const isSelf = p.id && p.id === selfId;
       const li = document.createElement("li");
-      li.className = "lb-item" + (p.id === selfId ? " is-self" : "");
+      li.className = "lb-item" + (isSelf ? " is-self" : "");
 
       const left = document.createElement("div");
       left.className = "lb-left";
@@ -365,20 +373,93 @@
 
       const dot = document.createElement("span");
       dot.className = "lb-dot";
-      dot.style.background = p.color;
+      dot.style.background = p.color || "#38bdf8";
 
       const name = document.createElement("span");
       name.className = "lb-name";
-      name.textContent = p.id === selfId ? `${p.name} (Kamu)` : p.name;
+      name.textContent = isSelf ? `${p.name} (Kamu)` : p.name || "Player";
 
       left.append(rank, dot, name);
 
       const score = document.createElement("span");
       score.className = "lb-score";
-      score.textContent = `${p.score} pts`;
+      score.textContent = `${scoreSelector(p)} pts`;
 
       li.append(left, score);
       leaderboardList.appendChild(li);
+    });
+  }
+
+  function updateLeaderboard() {
+    const sorted = Array.from(players.values()).sort((a, b) => b.score - a.score);
+    onlinePill.textContent = `Pemain: ${sorted.length}`;
+    const me = selfId ? players.get(selfId) : null;
+    selfScoreBadge.textContent = `Skor: ${me ? me.score : 0}`;
+    if (leaderboardMode === "hof") return;
+    if (hofStatsRow) hofStatsRow.classList.add("hidden");
+    renderLeaderboardRows(sorted, "Belum ada pemain terhubung.", (p) => p.score ?? 0);
+  }
+
+  function resolveHttpLeaderboardUrl() {
+    const curWs = wsUrlInput?.value?.trim() || "";
+    const hasAwsHttp = AWS_HTTP_API_URL && !AWS_HTTP_API_URL.includes("YOUR_HTTP_API_ID");
+    if (hasAwsHttp && curWs.includes(".amazonaws.com")) {
+      return `${AWS_HTTP_API_URL.replace(/\/$/, "")}/leaderboard`;
+    }
+    if (VPS_WS_URL) {
+      return VPS_WS_URL.replace(/^ws:/i, "http:").replace(/^wss:/i, "https:").replace(/\/ws$/, "/api/leaderboard");
+    }
+    if (window.location.protocol.startsWith("http")) {
+      return `${window.location.origin}/api/leaderboard`;
+    }
+    return "";
+  }
+
+  async function refreshHallOfFame() {
+    if (leaderboardMode !== "hof") return;
+    const url = resolveHttpLeaderboardUrl();
+    if (!url) {
+      renderLeaderboardMessage("Endpoint Hall of Fame belum dikonfigurasi.");
+      return;
+    }
+
+    renderLeaderboardMessage("Memuat Hall of Fame...");
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (leaderboardMode !== "hof") return;
+
+      const rows = Array.isArray(data.hallOfFame) ? data.hallOfFame.slice(0, 10) : [];
+      renderLeaderboardRows(
+        rows,
+        "Belum ada rekor Hall of Fame tersimpan.",
+        (entry) => entry.highestScore ?? 0
+      );
+
+      if (hofStatsRow && data.stats) {
+        hofStatsRow.textContent = `Total Event: ${data.stats.totalEvents || 0} • Koin Terkumpul: ${data.stats.totalCoinsCollected || 0}`;
+        hofStatsRow.classList.remove("hidden");
+      }
+    } catch {
+      if (leaderboardMode !== "hof") return;
+      renderLeaderboardMessage("Hall of Fame sementara belum dapat dimuat.");
+      if (hofStatsRow) hofStatsRow.classList.add("hidden");
+    }
+  }
+
+  if (tabLiveLb && tabHofLb) {
+    tabLiveLb.addEventListener("click", () => {
+      leaderboardMode = "live";
+      tabLiveLb.classList.add("active");
+      tabHofLb.classList.remove("active");
+      updateLeaderboard();
+    });
+    tabHofLb.addEventListener("click", () => {
+      leaderboardMode = "hof";
+      tabHofLb.classList.add("active");
+      tabLiveLb.classList.remove("active");
+      refreshHallOfFame();
     });
   }
 
@@ -436,6 +517,14 @@
         (msg.coins || []).forEach((c) => coins.set(c.id, c));
         lobbyOverlay.classList.add("hidden");
         setConnectionStatus("online", "Connected");
+        if (motdBanner) {
+          if (msg.motd) {
+            motdBanner.textContent = `📢 ${msg.motd}`;
+            motdBanner.classList.remove("hidden");
+          } else {
+            motdBanner.classList.add("hidden");
+          }
+        }
         appendChat("System", null, "Berhasil masuk arena! Kumpulkan koin & bintang sebanyak mungkin.", true);
         playTone(520, 0.14, "triangle", 0.08);
         updateLeaderboard();

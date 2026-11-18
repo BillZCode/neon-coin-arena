@@ -47,6 +47,27 @@ const MIME_TYPES = {
 
 const clients = new Map();
 const coins = new Map();
+const hallOfFame = new Map();
+const globalStats = { totalEvents: 0, totalCoinsCollected: 0, totalChats: 0 };
+
+function recordHallOfFame(client, coinDelta = 0) {
+  if (!client?.name) return;
+  const key = client.name.trim().toLowerCase() || client.id;
+  const cur = hallOfFame.get(key) || {
+    name: client.name,
+    color: client.color,
+    highestScore: 0,
+    totalCoins: 0,
+    gamesPlayed: 0,
+    updatedAt: Date.now(),
+  };
+  cur.name = client.name;
+  cur.color = client.color;
+  cur.highestScore = Math.max(cur.highestScore, client.score || 0);
+  cur.totalCoins += coinDelta;
+  cur.updatedAt = Date.now();
+  hallOfFame.set(key, cur);
+}
 
 function pickCoinType() {
   const total = COIN_CATALOG.reduce((s, c) => s + c.weight, 0);
@@ -194,9 +215,12 @@ function handleMessage(client, rawText) {
         type: "welcome",
         selfId: client.id,
         arena: { width: ARENA_W, height: ARENA_H },
+        motd: "Server VPS 24/7 aktif — siap dimainkan bersama kapan saja!",
         players: activePlayers,
         coins: Array.from(coins.values()),
       });
+      globalStats.totalEvents += 1;
+      recordHallOfFame(client, 0);
 
       broadcast({ type: "player_joined", player: publicPlayer(client) }, client.id);
       break;
@@ -236,6 +260,9 @@ function handleMessage(client, rawText) {
       client.coinsCollected += 1;
       client.x = Math.round(clamp(body.x, 22, ARENA_W - 22, client.x));
       client.y = Math.round(clamp(body.y, 22, ARENA_H - 22, client.y));
+      globalStats.totalEvents += 1;
+      globalStats.totalCoinsCollected += 1;
+      recordHallOfFame(client, 1);
 
       const spawnedCoin = spawnCoin();
       broadcast({
@@ -372,6 +399,32 @@ const server = http.createServer((req, res) => {
   if (reqUrl.pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, players: clients.size, coins: coins.size }));
+    return;
+  }
+
+  if (reqUrl.pathname === "/api/leaderboard") {
+    const livePlayers = Array.from(clients.values())
+      .filter((c) => c.joined)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20)
+      .map(publicPlayer);
+    const topHof = Array.from(hallOfFame.values())
+      .sort((a, b) => b.highestScore - a.highestScore)
+      .slice(0, 15);
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-cache",
+    });
+    res.end(
+      JSON.stringify({
+        hallOfFame: topHof,
+        livePlayers,
+        stats: globalStats,
+        motd: "Server VPS 24/7 aktif — siap dimainkan bersama kapan saja!",
+        updatedAt: Date.now(),
+      })
+    );
     return;
   }
 
